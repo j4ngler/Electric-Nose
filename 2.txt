@@ -1,0 +1,62 @@
+/                               # gốc repo
+├─ backend/                      # Spring Boot (Java 17 + Maven)
+│  ├─ src/
+│  │  ├─ main/java/com/electricnose/
+│  │  │  ├─ api/                # Controllers REST
+│  │  │  ├─ config/             # Security/MQTT/WebSocket/Swagger
+│  │  │  ├─ domain/             # Entities/Models
+│  │  │  ├─ dto/                # Request/Response DTOs
+│  │  │  ├─ repository/         # JPA + Mongo repositories
+│  │  │  ├─ service/            # Business logic
+│  │  │  └─ integration/        # MQTT/WebSocket clients
+│  │  └─ main/resources/
+│  │     ├─ application.yml
+│  │     └─ db/migration/       # Flyway/Liquibase
+│  ├─ src/test/java/...
+│  ├─ pom.xml
+│  ├─ .env.example
+│  └─ README.md
+│
+├─ frontend/                     # React + Vite + TypeScript
+│  ├─ src/
+│  │  ├─ app/                   # providers, routes
+│  │  ├─ components/            # ui components tái sử dụng
+│  │  ├─ features/
+│  │  │  ├─ auth/
+│  │  │  ├─ dashboard/
+│  │  │  ├─ devices/
+│  │  │  ├─ data/
+│  │  │  └─ reports/
+│  │  ├─ hooks/
+│  │  ├─ lib/                   # api client, websocket client
+│  │  ├─ pages/
+│  │  └─ styles/
+│  ├─ public/
+│  ├─ package.json
+│  ├─ vite.config.ts
+│  ├─ tsconfig.json
+│  ├─ .env.example
+│  ├─ firebase.json
+│  └─ .firebaserc
+│
+├─ infra/
+│  ├─ mqtt/
+│  │  ├─ topics.md              # chuẩn topics & payload
+│  │  └─ acl-policy.md          # chính sách truy cập (nếu dùng)
+│  ├─ ci/.github/workflows/
+│  │  ├─ backend.yml
+│  │  └─ frontend.yml
+│  └─ deploy/
+│     ├─ railway/               # cấu hình deploy backend (tuỳ chọn)
+│     └─ firebase/              # ghi chú deploy FE
+│
+├─ docs/
+│  ├─ COMPLETE_ARCHITECTURE_GUIDE.md
+│  ├─ WORK_BREAKDOWN_STRUCTURE.md
+│  ├─ WEB_DEVELOPMENT_GUIDE.md
+│  ├─ JAVA_DEVELOPMENT_GUIDE.md
+│  └─ DEPLOYMENT_OPTIONS.md
+│
+├─ .gitignore
+├─ README.md                     # mô tả tổng quan repo, cách chạy nhanh
+└─ LICENSE

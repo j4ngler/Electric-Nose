@@ -1,0 +1,259 @@
+{
+  "info": {
+    "_postman_id": "a3c2d4b8-ef10-4f6c-9c9d-0000electricnose",
+    "name": "Electric Nose API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection các API cho Electric-Nose Backend"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api","auth","register"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Passw0rd!\",\n  \"name\": \"User\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "List Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices", "host": ["{{baseUrl}}"], "path": ["api","devices"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Create Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"},
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices", "host": ["{{baseUrl}}"], "path": ["api","devices"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Electric Nose Device\",\n  \"description\": \"Lab device\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Device by DeviceId",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["api","devices","{{deviceId}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Update Device (by numeric id)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"},
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices/{{id}}", "host": ["{{baseUrl}}"], "path": ["api","devices","{{id}}"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Device\",\n  \"description\": \"Updated\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Device (by numeric id)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices/{{id}}", "host": ["{{baseUrl}}"], "path": ["api","devices","{{id}}"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Get Device Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices/{{deviceId}}/status", "host": ["{{baseUrl}}"], "path": ["api","devices","{{deviceId}}","status"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Device to User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/devices/{{deviceId}}/assign/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api","devices","{{deviceId}}","assign","{{userId}}"]}
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Data",
+      "item": [
+        {
+          "name": "Query Sensor Data (range)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data/sensors/{{deviceId}}?start={{start}}&end={{end}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","data","sensors","{{deviceId}}"],
+              "query": [
+                {"key":"start","value":"{{start}}"},
+                {"key":"end","value":"{{end}}"}
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Latest Sensor Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/data/sensors/{{deviceId}}/latest", "host": ["{{baseUrl}}"], "path": ["api","data","sensors","{{deviceId}}","latest"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Create Sensor Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"},
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/data/sensors/{{deviceId}}", "host": ["{{baseUrl}}"], "path": ["api","data","sensors","{{deviceId}}"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"temperature\": 25.5,\n  \"humidity\": 60,\n  \"gasLevel\": \"normal\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Device Control",
+      "item": [
+        {
+          "name": "Heating On/Off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"},
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/device-control/{{deviceId}}/heating", "host": ["{{baseUrl}}"], "path": ["api","device-control","{{deviceId}}","heating"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pump On/Off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"},
+              {"key":"Content-Type","value":"application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/device-control/{{deviceId}}/pump", "host": ["{{baseUrl}}"], "path": ["api","device-control","{{deviceId}}","pump"]},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Start Measurement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/device-control/{{deviceId}}/measure", "host": ["{{baseUrl}}"], "path": ["api","device-control","{{deviceId}}","measure"]}
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Measurement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Authorization","value":"Bearer {{token}}"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/device-control/{{deviceId}}/stop-measure", "host": ["{{baseUrl}}"], "path": ["api","device-control","{{deviceId}}","stop-measure"]}
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "token", "value": ""},
+    {"key": "deviceId", "value": "device1"},
+    {"key": "id", "value": "1"},
+    {"key": "userId", "value": "1"},
+    {"key": "start", "value": "2025-01-01T00:00:00"},
+    {"key": "end", "value": "2025-12-31T23:59:59"}
+  ]
+}
+
+

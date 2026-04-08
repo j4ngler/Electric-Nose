@@ -1,0 +1,205 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage{mathptmx}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{calc,positioning}
+
+\graphicspath{{docs/}{docs/figures/}{figures/}}
+
+\begin{document}
+
+% ====== TITLE PAGE ======
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\Large \textbf{SPEC PHẦN MỀM --- DỰ ÁN 1}\par}
+\vspace{0.5cm}
+{\LARGE \textbf{Điều khiển nhiệt ẩm (Peltier) --- Góc nhìn firmware}\par}
+
+\vspace{1.5cm}
+{\large Tài liệu dành cho thành viên tập trung phần mềm (không yêu cầu kiến thức thiết kế phần cứng chi tiết)\par}
+
+\vfill
+{\large \today\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\chapter{Dự án 1 --- Phần mềm điều khiển nhiệt ẩm (Peltier)}
+
+\section{Mục tiêu phần mềm và giả định làm việc}
+
+\subsection{Mục tiêu}
+Phần mềm chạy trên \textbf{ESP32} có nhiệm vụ:
+\begin{itemize}
+  \item \textbf{Đọc định kỳ} nhiệt độ $T$ và độ ẩm tương đối $H$ từ cảm biến môi trường qua bus \textbf{I\textsuperscript{2}C} (trong spec hệ thống: SHT35).
+  \item \textbf{Tính toán} giá trị đã lọc (trung bình trượt) và áp dụng luật \textbf{On--Off có hysteresis} cùng \textbf{min ON/OFF time} để quyết định bật/tắt làm lạnh/hút ẩm.
+  \item \textbf{Xuất tín hiệu điều khiển} qua một chân \textbf{GPIO} (mức cao/thấp) để bật/tắt khối công suất ngoài (bạn chỉ cần biết: ``bật = Peltier được cấp điện'', ``tắt = ngắt''; chi tiết MOSFET/relay do nhóm phần cứng đảm nhiệm).
+  \item \textbf{Ghi log / telemetry} (UART và/hoặc mesh) để debug và giám sát.
+  \item \textbf{Fail-safe}: khi cảm biến lỗi hoặc mất lệnh từ mạng (nếu bật tích hợp mesh), chuyển về trạng thái an toàn (tắt đầu ra).
+\end{itemize}
+
+\subsection{Giả định (bạn không cần thiết kế mạch)}
+\begin{itemize}
+  \item Địa chỉ I\textsuperscript{2}C, chân SDA/SCL và chân GPIO điều khiển được \textbf{cố định trong code hoặc Kconfig} theo bảng wiring do nhóm phần cứng cung cấp.
+  \item Driver cảm biến có thể dùng thư viện có sẵn (component trong repo) hoặc đọc thanh ghi theo datasheet --- phần mềm chỉ cần API kiểu \texttt{read\_temp\_humidity(\&T, \&H)}.
+  \item Phần cứng đảm bảo mức logic 3.3V và kết nối đúng; firmware không xử lý bảo vệ quá dòng trên bus nguồn 12V.
+\end{itemize}
+
+\section{Nền tảng và công cụ phát triển}
+
+\subsection{Dùng gì}
+\begin{itemize}
+  \item \textbf{SDK}: ESP-IDF (khuyến nghị phiên bản tương thích với branch dự án, ví dụ 5.x).
+  \item \textbf{Ngôn ngữ}: C (chuẩn embedded ESP32).
+  \item \textbf{Hệ điều hành nhẹ}: FreeRTOS (task, queue, timer software) --- có thể dùng 1 task chính vòng lặp định kỳ hoặc tách task đọc sensor / task điều khiển.
+  \item \textbf{Cấu hình build}: \texttt{menuconfig} / \texttt{sdkconfig} / \texttt{Kconfig} cho ngưỡng mặc định, chân GPIO, bật/tắt mesh.
+  \item \textbf{Lưu cấu hình runtime} (tuỳ chọn): NVS để lưu ngưỡng $T/H$, min ON/OFF sau khi cấp nguồn lại.
+\end{itemize}
+
+\subsection{Component / module trong firmware (gợi ý kiến trúc)}
+\begin{itemize}
+  \item \texttt{env\_sensor}: khởi tạo I\textsuperscript{2}C, đọc SHT35, trả về $T$, $H$ hoặc mã lỗi.
+  \item \texttt{peltier\_ctrl}: trạng thái bật/tắt, áp dụng hysteresis, min ON/OFF, lọc số.
+  \item \texttt{actuator\_gpio}: bọc \texttt{gpio\_set\_level(GPIO\_PEL\_EN, 0/1)} --- một chỗ duy nhất để đổi chân nếu hardware đổi mapping.
+  \item \texttt{app\_main} hoặc task điều phối: lịch đọc sensor, gọi bộ điều khiển, log.
+  \item (Tuỳ chọn) \texttt{mesh\_client}: nhận lệnh setpoint, gửi telemetry (theo dự án 3).
+\end{itemize}
+
+\section{Thiết kế phần mềm --- luồng dữ liệu và trạng thái}
+
+\subsection{Sơ đồ khối logic (phần mềm)}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=11mm,
+  block/.style={draw, rounded corners, align=center, minimum width=32mm, minimum height=9mm},
+  arrow/.style={->, thick}
+]
+  \node[block] (drv) {Driver\\I\textsuperscript{2}C + SHT35};
+  \node[block, right=14mm of drv] (flt) {Lọc số\\$T$, $H$};
+  \node[block, right=14mm of flt] (ctl) {Bộ điều khiển\\On--Off + hysteresis};
+  \node[block, right=14mm of ctl] (out) {GPIO\\PEL\_EN};
+  \node[block, below=12mm of flt] (cfg) {Cấu hình\\NVS / Kconfig};
+
+  \draw[arrow] (drv) -- node[above]{\small raw} (flt);
+  \draw[arrow] (flt) -- node[above]{\small $T_f,H_f$} (ctl);
+  \draw[arrow] (ctl) -- node[above]{\small ON/OFF} (out);
+  \draw[arrow] (cfg) -- (ctl);
+\end{tikzpicture}
+\caption{Luồng xử lý phần mềm (không mô tả chi tiết mạch công suất)}
+\label{fig:p1_sw_flow}
+\end{figure}
+
+\subsection{State machine / chu kỳ chính (gợi ý)}
+\begin{enumerate}
+  \item Khởi tạo: I\textsuperscript{2}C, GPIO đầu ra, (tuỳ chọn) NVS, UART log.
+  \item Vòng lặp định kỳ (ví dụ mỗi 500--1000\,ms):
+  \begin{enumerate}
+    \item Đọc $T$, $H$ từ sensor; nếu lỗi $\rightarrow$ tắt đầu ra, set cờ lỗi, log.
+    \item Cập nhật bộ đệm lọc (moving average 5--10 mẫu).
+    \item Nếu có cảm biến quá nhiệt tuỳ chọn $\rightarrow$ kiểm tra ngưỡng (nếu tích hợp trong firmware).
+    \item Áp dụng luật bật/tắt + min ON/OFF.
+    \item Ghi GPIO và log một dòng trạng thái.
+    \item (Tuỳ chọn) gửi gói telemetry lên mesh.
+  \end{enumerate}
+\end{enumerate}
+
+\section{Thuật toán điều khiển (chi tiết cho lập trình)}
+
+\subsection{Ngưỡng (có thể là tham số cấu hình)}
+\begin{itemize}
+  \item \textbf{Bật} làm lạnh/hút ẩm khi: $(T_f > 25^\circ C)$ \textbf{hoặc} $(H_f > 65\%)$.
+  \item \textbf{Tắt} khi: $(T_f < 20^\circ C)$ \textbf{và} $(H_f < 60\%)$.
+\end{itemize}
+Ở đây $T_f$, $H_f$ là giá trị sau lọc.
+
+\subsection{Chống đóng/ngắt liên tục}
+\begin{itemize}
+  \item \textbf{Lọc số}: trung bình trượt trên $N$ mẫu ($N = 5\ldots 10$), cập nhật mỗi lần đọc.
+  \item \textbf{Min ON time}: sau khi bật, không được tắt trước $t_{\mathrm{on,min}}$ (ví dụ 10--30\,s).
+  \item \textbf{Min OFF time}: sau khi tắt, không được bật lại trước $t_{\mathrm{off,min}}$ (ví dụ 10--30\,s).
+\end{itemize}
+Cài đặt cụ thể nên là hằng số có tên rõ ràng hoặc biến NVS.
+
+\subsection{Fail-safe phần mềm}
+\begin{itemize}
+  \item \textbf{Lỗi đọc sensor} (timeout, CRC, giá trị NaN): coi như không tin cậy $\rightarrow$ \textbf{tắt} GPIO Peltier, log lỗi, có thể nháy LED debug nếu có.
+  \item \textbf{Mất heartbeat / lệnh từ mesh} (nếu dùng): sau $t_{\mathrm{timeout}}$ (ví dụ 3--5\,s) không nhận lệnh hợp lệ $\rightarrow$ tắt Peltier (theo spec hệ thống).
+\end{itemize}
+
+\section{Giao diện phần mềm với ``thế giới bên ngoài'' (abstract)}
+
+\subsection{Đầu vào (input)}
+\begin{itemize}
+  \item \textbf{I\textsuperscript{2}C}: dữ liệu $T$, $H$ từ driver SHT35.
+  \item \textbf{Cấu hình}: file \texttt{sdkconfig} / Kconfig; có thể ghi đè bằng NVS sau lần chạy đầu.
+  \item (Tuỳ chọn) \textbf{Mesh / UART}: nhận lệnh đổi ngưỡng, enable/disable từ remote.
+\end{itemize}
+
+\subsection{Đầu ra (output) --- bạn cần deliver gì}
+\begin{itemize}
+  \item \textbf{GPIO}: một bit logic điều khiển đường bật/tắt Peltier (tên symbolic ví dụ \texttt{GPIO\_PEL\_EN}).
+  \item \textbf{UART log} (định dạng gợi ý, một dòng mỗi chu kỳ hoặc khi đổi trạng thái):
+  \begin{verbatim}
+[timestamp_ms] T=24.80 H=62.1 PEL=ON filt_ok=1 err=0
+  \end{verbatim}
+  \item \textbf{Telemetry} (nếu tích hợp dự án 3): JSON hoặc struct cố định gồm ít nhất: \texttt{temp}, \texttt{hum}, \texttt{peltier\_on}, \texttt{sensor\_ok}, \texttt{err\_code}.
+\end{itemize}
+
+\section{Yêu cầu phi chức năng (phần mềm)}
+\begin{itemize}
+  \item \textbf{Chu kỳ đọc sensor}: 1--2\,Hz (ổn định, không block lâu trên I\textsuperscript{2}C).
+  \item \textbf{Độ trễ phản ứng}: sau khi điều kiện vượt ngưỡng, hành vi bật/tắt vẫn tuân min ON/OFF (có thể chấp nhận trễ thêm vài chu kỳ do lọc).
+  \item \textbf{Không treo}: tránh busy-wait dài; dùng timer FreeRTOS hoặc \texttt{vTaskDelay} cho chu kỳ chính.
+  \item (Khuyến nghị) \textbf{Watchdog task}: đăng ký task quan trọng với TWDT nếu dự án yêu cầu độ tin cậy cao.
+\end{itemize}
+
+\section{Tiêu chí nghiệm thu phía firmware (không cần đo bằng đồng hồ vạn năng)}
+\begin{itemize}
+  \item Build project thành công, flash lên board ESP32 do nhóm cung cấp.
+  \item Log UART hiển thị $T$, $H$ thay đổi hợp lý khi môi trường thay đổi (hoặc mock sensor trong unit test nếu có).
+  \item Khi $T$, $H$ (đã lọc) vượt ngưỡng bật $\rightarrow$ sau min OFF (nếu đang tắt), GPIO chuyển sang trạng thái bật; khi đạt vùng tắt $\rightarrow$ sau min ON, GPIO tắt.
+  \item Ngắt kết nối sensor (hoặc mô phỏng lỗi driver) $\rightarrow$ firmware tắt đầu ra và báo lỗi trong log.
+  \item (Nếu có mesh) mất kết nối sau timeout $\rightarrow$ đầu ra về an toàn, log rõ ràng.
+\end{itemize}
+
+\section{Tích hợp với dự án 3 (mesh) --- phạm vi phần mềm}
+Firmware node Peltier có thể:
+\begin{itemize}
+  \item Đăng ký làm node con, nhận bản tin chứa ngưỡng $T_{\min}, T_{\max}, H_{\min}, H_{\max}$ hoặc \texttt{enable}.
+  \item Gửi định kỳ telemetry trùng khớp với dữ liệu đang log UART.
+\end{itemize}
+Chi tiết định dạng bản tin tham chiếu tài liệu dự án 3; phần mềm dự án 1 chỉ cần implement parser tối thiểu và callback cập nhật tham số điều khiển.
+
+\section{Phụ lục: Bảng tham số mặc định (điền vào khi triển khai)}
+\begin{table}[H]
+\centering
+\caption{Tham số firmware --- dự án 1 (mẫu)}
+\begin{tabular}{|l|l|p{6.5cm}|}
+\hline
+\textbf{Tham số} & \textbf{Gợi ý} & \textbf{Ghi chú} \\
+\hline
+\texttt{READ\_PERIOD\_MS} & 500--1000 & Chu kỳ vòng lặp chính \\
+\hline
+\texttt{FILTER\_LEN} & 5--10 & Số mẫu trung bình trượt \\
+\hline
+\texttt{T\_ON}, \texttt{H\_ON} & 25$^\circ$C, 65\% & Ngưỡng bật (OR) \\
+\hline
+\texttt{T\_OFF}, \texttt{H\_OFF} & 20$^\circ$C, 60\% & Ngưỡng tắt (AND) \\
+\hline
+\texttt{MIN\_ON\_S}, \texttt{MIN\_OFF\_S} & 10--30 & Giới hạn thời gian bật/tắt \\
+\hline
+\texttt{GPIO\_PEL\_EN} & Theo wiring & Chỉ đổi một chỗ trong code \\
+\hline
+\end{tabular}
+\end{table}
+
+\end{document}

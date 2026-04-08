@@ -1,0 +1,31 @@
+[Thiết bị ESP32/Firmware]
+  ├─ Sensors/Drivers (SHT3x, ADS111x, DS3231, PCF8575)
+  ├─ WiFi + MQTT Client (pub/sub, reconnect)
+  ├─ SD Logging + File Rotation
+  ├─ Control (relay/pump/fan) + Safety
+  └─ LCD UI (LVGL)
+
+        ⇅ MQTT (HiveMQ Cloud)
+
+[Backend (Spring Boot)]
+  ├─ REST APIs (Auth, User, Device, Data, Report)
+  ├─ MQTT Integration (ingest telemetry, publish command)
+  ├─ Data Services (validate/clean/aggregate/query)
+  ├─ Realtime (WebSocket/SSE → Frontend)
+  ├─ Reports (PDF/Excel), Notifications (email/push)
+  └─ Storage (Postgres, MongoDB, Redis)
+
+        ⇅ HTTP/WebSocket
+
+[Frontend (React + Vite + TS)]
+  ├─ Auth + Guards
+  ├─ Dashboard (realtime + charts)
+  ├─ Lịch sử dữ liệu, lọc, export
+  ├─ Điều khiển thiết bị, cấu hình
+  └─ Reports UI, Settings
+
+[Infra/DevOps]
+  ├─ MQTT Topics/ACL
+  ├─ CI/CD (GitHub Actions)
+  ├─ Deploy (Railway backend, Firebase Hosting frontend)
+  └─ Monitoring/Alerts
