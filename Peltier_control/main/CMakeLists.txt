@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "config/app_config.c"
+        "hal_drivers/sht35_ao3401.c"
+        "hal_drivers/ntc_adc.c"
+        "hal_drivers/peltier_aod4184.c"
+        "middleware/moving_avg_filter.c"
+        "app_control/peltier_fsm.c"
+        "app_control/telemetry_logger.c"
+    INCLUDE_DIRS
+        "."
+        "config"
+        "hal_drivers"
+        "middleware"
+        "app_control"
+    REQUIRES
+        driver
+        esp_adc
+        esp_driver_gpio
+        esp_driver_gptimer
+        esp_timer
+        nvs_flash
+)
