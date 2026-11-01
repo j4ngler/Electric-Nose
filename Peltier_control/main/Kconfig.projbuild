@@ -1,0 +1,121 @@
+menu "Peltier Controller Configuration"
+
+    menu "Hardware Pinout (Matched with Schematic)"
+        config PELTIER_AO3401_GPIO
+            int "AO3401 Gate GPIO (SHT35 Power Control, Active LOW)"
+            default 4
+            help
+                On the schematic (Sensors block), the AO3401 gate pin is connected through R2 (1k) to GPIO4 (D4 pin).
+                If you rename the label on the schematic to match the .md file, set it to 13 instead.
+
+        config PELTIER_AOD4184_GPIO
+            int "AOD4184 Opto Control GPIO (PWM net on Schematic)"
+            default 13
+            help
+                On the schematic (AOD4184 module block), the Opto PC817 input (PWM label) is connected to D13 (GPIO13).
+                If you connect it to D4 (GPIO4) according to the .md file, set it to 4 instead.
+
+        config PELTIER_AOD4184_ACTIVE_HIGH
+            bool "AOD4184 Active High Level (PC817 Opto Input)"
+            default y
+            help
+                On the schematic, driving HIGH on the PWM label turns on the LED inside PC817, which triggers Q2 (AOD4184A).
+
+        config PELTIER_I2C_SDA_GPIO
+            int "SHT35 I2C SDA GPIO (D21)"
+            default 21
+
+        config PELTIER_I2C_SCL_GPIO
+            int "SHT35 I2C SCL GPIO (D22)"
+            default 22
+
+        config PELTIER_SHT35_RST_GPIO
+            int "SHT35 RST GPIO (D23 on JP 1x6)"
+            default 23
+
+        config PELTIER_SHT35_INT_GPIO
+            int "SHT35 INT GPIO (D19 on JP 1x6)"
+            default 19
+    endmenu
+
+    menu "Control & Protection Parameters"
+        config PELTIER_SYSTEM_ENABLE
+            bool "Enable Peltier Control System by Default"
+            default y
+
+        config PELTIER_TEMP_ON_X10
+            int "Turn ON Temperature Threshold (x0.1 C, e.g. 255 = 25.5 C)"
+            default 255
+
+        config PELTIER_TEMP_OFF_X10
+            int "Turn OFF Temperature Threshold (x0.1 C, e.g. 240 = 24.0 C)"
+            default 240 
+
+        config PELTIER_HUM_ON_X10
+            int "Turn ON Humidity Threshold (x0.1 %RH, e.g. 650 = 65.0 %)"
+            default 650
+
+        config PELTIER_HUM_OFF_X10
+            int "Turn OFF Humidity Threshold (x0.1 %RH, e.g. 400 = 40.0 %)"
+            default 400
+
+        config PELTIER_MIN_ON_OFF_SEC
+            int "Minimum ON/OFF Hold Time (seconds)"
+            range 10 30
+            default 15
+
+        config PELTIER_NTC_LIMIT_X10
+            int "NTC Overheat Cutoff Threshold (x0.1 C, e.g. 800 = 80.0 C)"
+            default 800
+
+        config PELTIER_NTC_RECOVER_X10
+            int "NTC Safe Recovery Threshold (x0.1 C, e.g. 650 = 65.0 C)"
+            default 650
+
+        config PELTIER_SAMPLE_PERIOD_MS
+            int "Sensor Sampling Period (ms, 500ms - 2000ms)"
+            range 500 2000
+            default 1000
+
+        config PELTIER_FILTER_WINDOW
+            int "Moving Average Filter Window Size (5 - 10 samples)"
+            range 5 10
+            default 5
+
+        config PELTIER_SELF_TEST_ENABLE
+            bool "Run Hardware Self-Test (POST) on Boot"
+            default y
+            help
+                Automatically check the NTC (GPIO34), AO3401 + SHT35 (GPIO4/21/22/23), and pulse-test LED L3 on the AOD4184 module (GPIO13) at startup.
+
+        config PELTIER_SELF_TEST_PULSE_MS
+            int "AOD4184 LED L3 Self-Test Pulse Width (ms)"
+            depends on PELTIER_SELF_TEST_ENABLE
+            range 50 500
+            default 150
+            help
+                Pulse width for the Opto PC817 & LED L3 test at GPIO13 (default 150 ms).
+    endmenu
+
+    menu "CAN (TWAI) Telemetry (Project 3 Optional)"
+        config PELTIER_ENABLE_CAN
+            bool "Enable CAN (TWAI) Telemetry & Timeout Supervision"
+            default n
+
+        config PELTIER_CAN_TX_GPIO
+            int "CAN TX GPIO"
+            depends on PELTIER_ENABLE_CAN
+            default 25
+
+        config PELTIER_CAN_RX_GPIO
+            int "CAN RX GPIO"
+            depends on PELTIER_ENABLE_CAN
+            default 26
+
+        config PELTIER_CAN_TIMEOUT_MS
+            int "CAN Communication Timeout (ms)"
+            depends on PELTIER_ENABLE_CAN
+            default 5000
+    endmenu
+
+endmenu
