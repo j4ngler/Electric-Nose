@@ -75,20 +75,12 @@ void peltier_fsm_update(peltier_fsm_state_t *fsm,
         return;
     }
     
-    // 3. On-Off + Hysteresis algorithm
+    // 3. Cooling/dehumidification stops when either reading reaches its lower bound.
     bool target_state = fsm->peltier_on;
-    if (!fsm->peltier_on) {
-        // TURN ON when (T > T_on) OR (H > H_on)
-        // if (temp_c > cfg->temp_on_c || hum_rh > cfg->hum_on_rh) {
-        if (hum_rh > cfg->hum_on_rh) {
-            target_state = true;
-        }
-    } else {
-        // TURN OFF when (T < T_off) AND (H < H_off)
-        // if (temp_c < cfg->temp_off_c && hum_rh < cfg->hum_off_rh) {
-        if (hum_rh < cfg->hum_off_rh) {
-            target_state = false;
-        }
+    if (temp_c <= cfg->temp_off_c || hum_rh <= cfg->hum_off_rh) {
+        target_state = false;
+    } else if (temp_c >= cfg->temp_on_c || hum_rh >= cfg->hum_on_rh) {
+        target_state = true;
     }
 
     // 4. Minimum state hold time constraint (Min ON/OFF time: 10 - 30s)

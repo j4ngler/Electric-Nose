@@ -1,0 +1,26 @@
+menuconfig PELTIER_MESH
+    bool "Enable Electric Nose / Peltier ESP-WIFI-MESH"
+    default y
+
+if PELTIER_MESH
+    config PELTIER_MESH_ROUTER
+        string "2.4 GHz router SSID"
+        default ""
+
+    config PELTIER_MESH_ROUTER_PASSWORD
+        string "Router password"
+        default ""
+
+    config PELTIER_MESH_CHANNEL
+        int "Router Wi-Fi channel"
+        range 1 13
+        default 6
+
+    config PELTIER_MESH_PASSWORD
+        string "Mesh AP password (8 to 63 characters)"
+        default ""
+
+    config PELTIER_MESH_PEER
+        string "Peer Wi-Fi STA MAC (aa:bb:cc:dd:ee:ff)"
+        default ""
+endif

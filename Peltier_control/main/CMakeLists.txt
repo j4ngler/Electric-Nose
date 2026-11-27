@@ -17,8 +17,9 @@ idf_component_register(
     REQUIRES
         driver
         esp_adc
-        esp_driver_gpio
-        esp_driver_gptimer
+        esp_event
+        esp_netif
+        peltier_mesh
         esp_timer
         nvs_flash
 )

@@ -7,7 +7,7 @@
 
 #define NTC_ADC_UNIT            ADC_UNIT_1
 #define NTC_ADC_CHANNEL         ADC_CHANNEL_6   // Channel D34 (GPIO34) on Schematic
-#define NTC_ADC_ATTEN           ADC_ATTEN_DB_12
+#define NTC_ADC_ATTEN           ADC_ATTEN_DB_11
 #define NTC_VCC_MV              3300.0f
 #define NTC_R3_PULLDOWN_OHM     10000.0f        // Resistor R3 = 10k connected to GND on Schematic
 #define NTC_R25_OHM             10000.0f        // NTC 10k at 25 C

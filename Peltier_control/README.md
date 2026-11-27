@@ -1,53 +1,29 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-H21 | ESP32-H4 | ESP32-P4 | ESP32-S2 | ESP32-S3 | Linux |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | --------- | -------- | -------- | -------- | -------- | ----- |
+# Peltier Controller
 
-# Hello World Example
+Firmware ESP32 điều khiển Peltier. Build từ thư mục này bằng ESP-IDF 5.1.2. Khi bật ESP-WIFI-MESH, bo này làm node và giao tiếp với bo root chạy firmware Electric-Nose.
 
-Starts a FreeRTOS task to print "Hello World".
-
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
-
-## How to use example
-
-Follow detailed instructions provided specifically for this example.
-
-Select the instructions depending on Espressif chip installed on your development board:
-
-- [ESP32 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/index.html)
-- [ESP32-S2 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
-
-
-## Example folder contents
-
-The project **hello_world** contains one source file in C language [hello_world_main.c](main/hello_world_main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt` files that provide set of directives and instructions describing the project's source files and targets (executable, library, or both).
-
-Below is short explanation of remaining files in the project folder.
-
-```
-├── CMakeLists.txt
-├── pytest_hello_world.py      Python script used for automated testing
-├── main
-│   ├── CMakeLists.txt
-│   └── hello_world_main.c
-└── README.md                  This is the file you are currently reading
+```powershell
+idf.py -D SDKCONFIG=sdkconfig.mesh -D SDKCONFIG_DEFAULTS=sdkconfig menuconfig
+idf.py -D SDKCONFIG=sdkconfig.mesh -D SDKCONFIG_DEFAULTS=sdkconfig build
+idf.py -D SDKCONFIG=sdkconfig.mesh -D SDKCONFIG_DEFAULTS=sdkconfig -p COMx flash monitor
 ```
 
-For more information on structure and contents of ESP-IDF projects, please refer to Section [Build System](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/build-system.html) of the ESP-IDF Programming Guide.
+Trong menuconfig, bật Mesh và nhập thông tin router 2,4 GHz, mật khẩu Mesh AP và STA MAC của bo root. Dùng cùng router, kênh và mật khẩu Mesh AP trên hai bo. Chọn cổng COM của bo Peltier. File ứng dụng tạo ra là `build/peltier_controller.bin`.
 
-## Troubleshooting
+Xem [hướng dẫn kiểm tra hai bo](../../Electric-Nose/README.md#thử-điều-khiển-peltier-qua-esp-wifi-mesh) trong dự án Electric-Nose.
 
-* Program upload failure
+## Ngưỡng điều khiển
 
-    * Hardware connection is not correct: run `idf.py -p PORT monitor`, and reboot your board to see if there are any output logs.
-    * The baud rate for downloading is too high: lower your baud rate in the `menuconfig` menu, and try again.
+- Dải nhiệt độ buồng mặc định là **20–40 °C**. Dải độ ẩm là **50–65% RH**.
+- Peltier yêu cầu bật khi nhiệt độ đạt 40 °C hoặc độ ẩm đạt 65% RH. Khi
+  nhiệt độ xuống 20 °C hoặc độ ẩm xuống 50% RH, yêu cầu tắt được ưu tiên.
+  Trong khoảng giữa các ngưỡng, bộ điều khiển giữ trạng thái hiện tại.
+- Đổi trạng thái bình thường phải đủ thời gian giữ tối thiểu (mặc định
+  15 giây). Lỗi cảm biến, bảo vệ quá nhiệt hoặc mất quyền chạy ngắt đầu
+  ra ngay ở lần cập nhật phát hiện lỗi.
 
-## Technical support and feedback
-
-Please use the following feedback channels:
-
-* For technical queries, go to the [esp32.com](https://esp32.com/) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
-
-We will get back to you as soon as possible.
+Firmware lấy các ngưỡng từ cấu hình build. Để chỉnh, vào **Peltier
+Controller Configuration → Control & Protection Parameters** trong
+`menuconfig`, sau đó build và nạp lại bo Peltier. Nhiệt độ và độ ẩm
+trong menu nhập theo đơn vị 0,1. Web/app và gói Mesh hiện chưa hỗ trợ
+thay đổi ngưỡng lúc chạy.

@@ -13,6 +13,11 @@
 #include "moving_avg_filter.h"
 #include "peltier_fsm.h"
 #include "telemetry_logger.h"
+#if CONFIG_PELTIER_MESH
+#include "esp_event.h"
+#include "esp_netif.h"
+#include "peltier_mesh.h"
+#endif
 
 static const char *TAG = "MAIN";
 static TaskHandle_t s_control_task_handle = NULL;
@@ -58,6 +63,9 @@ static bool run_hardware_self_test(const app_config_t *cfg)
     }
 
     // Step 4: Pulse 2 test signals on Opto PC817 & LED L3 (GPIO13 - PWM label) if NTC is safe
+#if CONFIG_PELTIER_MESH
+    ESP_LOGI(TAG, "[POST ACTUATOR] Pulse skipped in remote-control mode.");
+#else
     if (ntc_safe) {
         ESP_LOGI(TAG, "[POST ACTUATOR] Pulse test 2 bursts (%d ms) on GPIO%d (PWM) -> Observe LED L3...",
                  CONFIG_PELTIER_SELF_TEST_PULSE_MS, CONFIG_PELTIER_AOD4184_GPIO);
@@ -73,6 +81,7 @@ static bool run_hardware_self_test(const app_config_t *cfg)
         ESP_LOGW(TAG, "[POST ACTUATOR] Skipped AOD4184 test (GPIO%d) because the NTC reported a fault or overheat.",
                  CONFIG_PELTIER_AOD4184_GPIO);
     }
+#endif
     ESP_LOGI(TAG, "   SELF-TEST RESULT: %s", all_passed ? "COMPLETE (ALL PASS)" : "HARDWARE ERROR (CHECK LOG)");
     return all_passed;
 }
@@ -148,7 +157,23 @@ static void peltier_control_task(void *pvParameters)
         bool can_ok = telemetry_check_can_alive();
 
         // 4. Update the FSM state machine & drive the signal on D13 (GPIO13 - PWM label)
-        peltier_fsm_update(&fsm_state, &s_app_cfg, filt_temp, filt_hum, temp_hot, sht35_ok, ntc_ok, can_ok);
+        app_config_t effective_cfg = s_app_cfg;
+#if CONFIG_PELTIER_MESH
+        bool remote_enabled = peltier_mesh_node_enabled();
+        effective_cfg.system_enable = s_app_cfg.system_enable && remote_enabled;
+#endif
+        peltier_fsm_update(&fsm_state, &effective_cfg, filt_temp, filt_hum, temp_hot, sht35_ok, ntc_ok, can_ok);
+#if CONFIG_PELTIER_MESH
+        const peltier_mesh_status_t status = {
+            .enabled = effective_cfg.system_enable,
+            .output_on = fsm_state.peltier_on,
+            .temp_c = filt_temp,
+            .humidity = filt_hum,
+            .hot_c = temp_hot,
+            .errors = fsm_state.error_flags,
+        };
+        peltier_mesh_send_status(&status);
+#endif
 
         // 5. Output UART monitoring logs & transmit CAN telemetry packets
         telemetry_log_uart(&fsm_state);
@@ -174,11 +199,17 @@ void app_main(void)
     run_hardware_self_test(&s_app_cfg);
 #endif
 
+#if CONFIG_PELTIER_MESH
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(peltier_mesh_start(false));
+#endif
+
     // 5. Create the FreeRTOS task for sensor reading and Peltier control
     xTaskCreatePinnedToCore(
         peltier_control_task,
         "peltier_ctrl_task",
-        4096,
+        6144,
         NULL,
         5,
         &s_control_task_handle,

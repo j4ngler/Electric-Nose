@@ -34,3 +34,5 @@ Desktop.ini
 build/
 dist/
 *.egg-info/
+sdkconfig.mesh
+sdkconfig.mesh.old
