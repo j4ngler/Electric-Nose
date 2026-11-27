@@ -27,12 +27,11 @@
 #include "esp_mac.h"
 #include "esp_attr.h"
 #include <spi_flash_mmap.h>
-#include "esp_wifi.h"
-#include "esp_wifi_types.h"
+#if CONFIG_PELTIER_MESH
+#include "peltier_mesh.h"
+#endif
 #include "esp_tls.h"
 #include "esp_ota_ops.h"
-#include "esp_eap_client.h"
-#include "esp_smartconfig.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
@@ -58,7 +57,7 @@
 #include "sntp_sync.h"
 #include "ADS111x.h"
 #include "sht3x.h"
-#include "FileServer.h"
+#include "WifiSetup.h"
 #include "esp_lcd_ili9341.h"
 #include "extended_ili9341.h"
 #include "ui/ui.h"
@@ -84,7 +83,6 @@ TaskHandle_t getDataFromSensorTask_handle = NULL;
 TaskHandle_t saveDataSensorToSDcardTask_handle = NULL;
 TaskHandle_t sntp_syncTimeTask_handle = NULL;
 TaskHandle_t allocateDataForMultipleQueuesTask_handle = NULL;
-TaskHandle_t smartConfigTask_handle = NULL;
 
 SemaphoreHandle_t getDataSensor_semaphore = NULL;
 SemaphoreHandle_t SDcard_semaphore = NULL;
@@ -94,12 +92,9 @@ SemaphoreHandle_t monitor_temperature_humidity_semaphore = NULL; // Semaphore fo
 
 QueueHandle_t dataSensorSentToSD_queue = NULL;
 // Event group
-EventGroupHandle_t wifi_control_eventGroup;
 EventGroupHandle_t measure_control_eventGroup;
 
 static char nameFileSaveData[21] = {0};
-static const char base_path[] = MOUNT_POINT;
-httpd_handle_t file_server = NULL; // handle for file server
 
 gptimer_handle_t clean_chamber_Timer = NULL; // Timer for cleaning sensor chamber stage
 
@@ -114,277 +109,6 @@ moduleError_st moduleError;
 const uint8_t addresses[CONFIG_ADS111X_DEVICE_COUNT] = {
     ADS111X_ADDR_SDA,
     ADS111X_ADDR_GND};
-
-/*------------------------------------ WIFI ------------------------------------ */
-// Define Wi-Fi
-#define WIFI_connect_max_attemp_number CONFIG_MAX_RECONNECT_ATTEMP_NUMBER
-static const char *SC_TAG = "SMART CONFIG";
-static smartconfig_start_config_t smart_cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
-static uint8_t attemp_count = 0;
-bool change_AP = false;
-bool is_connected = false;
-static uint8_t attemp_count_1 = 0;
-static wifi_config_t wifi_config;
-uint8_t old_ssid[32] = CONFIG_DEFAULT_AP_SSID;
-uint8_t old_password[64] = CONFIG_DEFAULT_AP_PASSWORD;
-uint8_t old_bssid[6] = {0x34, 0xE8, 0x94, 0xF6, 0xAA, 0xD7};
-
-/**
- * @brief Manage wifi state base on event from wifi_control_eventGroup
- * WIFI_OFF_BIT: turn off wifi and smartconfig
- * WIFI_ON_BIT: turn on wifi
- */
-static void wifi_control_task(void *parm)
-{
-    wifi_control_eventGroup = xEventGroupCreate();
-    for (;;)
-    {
-        EventBits_t uxBits = xEventGroupWaitBits(
-            wifi_control_eventGroup,
-            WIFI_OFF_BIT | WIFI_ON_BIT,
-            pdTRUE,
-            pdFALSE,
-            portMAX_DELAY);
-
-        if (uxBits & WIFI_OFF_BIT)
-        {
-            // esp_wifi_disconnect();
-            esp_smartconfig_stop();
-            esp_wifi_stop();
-            esp_wifi_deinit();
-        }
-        else
-        {
-            if (uxBits & WIFI_ON_BIT)
-            {
-                wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-                esp_wifi_init(&cfg);
-                ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_mode(WIFI_MODE_STA));
-                ESP_ERROR_CHECK_WITHOUT_ABORT(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH));
-                ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_start());
-            }
-        }
-    }
-}
-
-static void Wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)
-{
-    if (event_base == WIFI_EVENT)
-    {
-        switch (event_id)
-        {
-        case WIFI_EVENT_STA_START:
-        {
-            ui_wifi_setting_label_state_change(WIFI_START, "Start connecting");
-            ESP_ERROR_CHECK(esp_smartconfig_start(&smart_cfg));
-            break;
-        }
-        case WIFI_EVENT_STA_STOP:
-        {
-            ui_wifi_setting_label_state_change(WIFI_NOT_CONNECTED, "Not connected");
-
-            stop_file_server(file_server);
-            break;
-        }
-        case WIFI_EVENT_STA_DISCONNECTED:
-        {
-            if (is_connected == true)
-            {
-                is_connected = false;
-                ui_update_device_icon_state(wifi_icon, false);
-                char *ssid_str = (char *)malloc(128 * sizeof(char));
-                sprintf(ssid_str, "Reconnecting to: %s", wifi_config.sta.ssid);
-                ui_wifi_setting_label_state_change(WIFI_RECONNECT, ssid_str);
-                free(ssid_str);
-            }
-            if ((change_AP == true) && ((wifi_config.sta.ssid != old_ssid) || (wifi_config.sta.password != old_password) || (wifi_config.sta.bssid != old_bssid)))
-            {
-                if (attemp_count < WIFI_connect_max_attemp_number)
-                {
-                    esp_wifi_connect();
-                    attemp_count += 1;
-                    ESP_LOGE(__func__, "Wi-Fi disconnected: Retrying connect to AP SSID:%s password:%s", wifi_config.sta.ssid, wifi_config.sta.password);
-                }
-                else
-                {
-                    memcpy(wifi_config.sta.ssid, old_ssid, sizeof(old_ssid));
-                    memcpy(wifi_config.sta.password, old_password, sizeof(old_password));
-                    ESP_LOGI(TAG, "Reconfigurating the previous AP: SSID: %s PASSWORDS: %s", wifi_config.sta.ssid, wifi_config.sta.password);
-                    memcpy(wifi_config.sta.bssid, old_bssid, sizeof(old_bssid));
-                    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-                    attemp_count += 1;
-                }
-                ESP_LOGI(TAG, "Connect to the new AP unsuccessfully");
-            }
-            else
-            {
-                if (change_AP == true)
-                {
-                    esp_wifi_disconnect();
-                    change_AP = false;
-                }
-            }
-            if ((change_AP == false) || (attemp_count > WIFI_connect_max_attemp_number))
-            {
-                if (change_AP == true)
-                {
-                    ESP_LOGI(TAG, "Trying to reconnect to the previous AP");
-                    change_AP = false;
-                }
-
-                if (attemp_count_1 < WIFI_connect_max_attemp_number)
-                {
-                    esp_wifi_connect();
-                    attemp_count_1 += 1;
-                    ESP_LOGE(TAG, "Wi-Fi disconnected: Retrying connect to AP SSID:%s password:%s", wifi_config.sta.ssid, wifi_config.sta.password);
-                }
-                else
-                {
-                    ESP_LOGI(TAG, "Connect to the AP unsuccessfully. Smart Config again");
-                    if (esp_smartconfig_stop() == ESP_OK)
-                    {
-                        esp_smartconfig_start(&smart_cfg);
-                    }
-                }
-            }
-
-            break;
-        }
-        default:
-            break;
-        }
-    }
-    else
-    {
-        if (event_base == IP_EVENT)
-        {
-            if (event_id == IP_EVENT_STA_GOT_IP)
-            {
-                // wifi_state_display(true);
-                ESP_LOGI(TAG, "The Device got an IP successfully");
-                attemp_count = 0;
-                attemp_count_1 = 0;
-                is_connected = true;
-                memcpy(old_ssid, wifi_config.sta.ssid, sizeof(wifi_config.sta.ssid));
-                memcpy(old_password, wifi_config.sta.password, sizeof(wifi_config.sta.password));
-                memcpy(old_bssid, wifi_config.sta.bssid, sizeof(wifi_config.sta.bssid));
-                start_file_server(&file_server, base_path); // start file server
-                wifi_ap_record_t ap_info;
-                esp_wifi_sta_get_ap_info(&ap_info);
-                char *ssid_str = (char *)malloc(128 * sizeof(char));
-                sprintf(ssid_str, "Connected to: %s", wifi_config.sta.ssid);
-                ui_wifi_setting_label_state_change(WIFI_GOT_IP, ssid_str);
-                free(ssid_str);
-                ESP_LOGI(TAG, "AP MAC ADDRESS: %02X:%02X:%02X:%02X:%02X:%02X", ap_info.bssid[0], ap_info.bssid[1], ap_info.bssid[2], ap_info.bssid[3], ap_info.bssid[4], ap_info.bssid[5]);
-                ui_update_device_icon_state(wifi_icon, true);
-            }
-        }
-        else
-        {
-            if (event_base == SC_EVENT)
-            {
-                switch (event_id)
-                {
-                case SC_EVENT_SCAN_DONE:
-                {
-                    ui_wifi_setting_label_state_change(WIFI_SCAN_DONE, "Finding Access Point...");
-                    ESP_LOGI(SC_TAG, "Scan done");
-                    break;
-                }
-                case SC_EVENT_FOUND_CHANNEL:
-                {
-                    attemp_count = 0;
-                    attemp_count_1 = 0;
-                    change_AP = true;
-                    ui_wifi_setting_label_state_change(WIFI_FOUND_CHANNEL, "Found Access Point");
-                    ESP_LOGI(SC_TAG, "Found channel");
-                    break;
-                }
-                case SC_EVENT_GOT_SSID_PSWD:
-                {
-                    ESP_LOGI(SC_TAG, "Got SSID and password");
-
-                    smartconfig_event_got_ssid_pswd_t *evt = (smartconfig_event_got_ssid_pswd_t *)event_data;
-
-                    uint8_t ssid[33] = {0};
-                    uint8_t password[65] = {0};
-                    uint8_t bssid[6] = {0};
-                    uint8_t rvd_data[33] = {0};
-
-                    bzero(&wifi_config, sizeof(wifi_config_t));
-                    memcpy(wifi_config.sta.ssid, evt->ssid, sizeof(wifi_config.sta.ssid));
-                    memcpy(wifi_config.sta.password, evt->password, sizeof(wifi_config.sta.password));
-                    wifi_config.sta.bssid_set = evt->bssid_set;
-                    if (wifi_config.sta.bssid_set == true)
-                    {
-                        memcpy(wifi_config.sta.bssid, evt->bssid, sizeof(wifi_config.sta.bssid));
-                        memcpy(bssid, evt->bssid, sizeof(evt->bssid));
-                        ESP_LOGI(SC_TAG, "AP MAC ADDRESS: %02X:%02X:%02X:%02X:%02X:%02X", bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-                    }
-
-                    memcpy(ssid, evt->ssid, sizeof(evt->ssid));
-                    memcpy(password, evt->password, sizeof(evt->password));
-
-                    ESP_LOGI(SC_TAG, "SSID:%s", ssid);
-                    ESP_LOGI(SC_TAG, "PASSWORD:%s", password);
-                    char *ssid_str = (char *)malloc(128 * sizeof(char));
-                    sprintf(ssid_str, "Connecting to: %s", ssid);
-                    ui_wifi_setting_label_state_change(WIFI_GOT_SSID_PWD, ssid_str);
-                    free(ssid_str);
-                    if (evt->type == SC_TYPE_ESPTOUCH_V2)
-                    {
-                        ESP_ERROR_CHECK(esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)));
-                        ESP_LOGI(SC_TAG, "RVD_DATA:");
-                        for (int i = 0; i < 33; i++)
-                        {
-                            printf("%02x ", rvd_data[i]);
-                        }
-                        printf("\n");
-                    }
-
-                    ESP_ERROR_CHECK(esp_wifi_disconnect());
-                    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-                    esp_wifi_connect();
-                    break;
-                }
-                case SC_EVENT_SEND_ACK_DONE:
-                {
-                    esp_smartconfig_stop();
-                    change_AP = false;
-
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-        }
-    }
-}
-
-/**
- *
- * @brief This function initialize wifi and create, start WiFi handle such as loop (low priority)
- *
- */
-static void WIFI_init(void)
-{
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    assert(sta_netif);
-
-    esp_event_handler_instance_t instance_any_id_Wifi;
-    esp_event_handler_instance_t instance_got_ip;
-    esp_event_handler_instance_t instance_any_id_SmartConfig;
-
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &Wifi_event_handler, &instance_any_id_Wifi));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Wifi_event_handler, &instance_got_ip));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &Wifi_event_handler, &instance_any_id_SmartConfig));
-
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    wifi_config.sta.pmf_cfg.capable = true;
-    wifi_config.sta.pmf_cfg.required = false;
-}
 
 /*------------------------------------ GET DATA FROM SENSOR ------------------------------------ */
 
@@ -767,9 +491,9 @@ void app_main(void)
 
     xTaskCreate(&readSenorChamberTemperature_task, "Temperature monitor task", 10 * 1024, NULL, 11, NULL);
 
-    xTaskCreate(&wifi_control_task, "wifi control task", (10 * 1024), NULL, 10, NULL);
-
-#if CONFIG_USING_WIFI
-    WIFI_init();
+#if CONFIG_PELTIER_MESH
+    ESP_ERROR_CHECK_WITHOUT_ABORT(peltier_mesh_start(true));
+#elif CONFIG_USING_WIFI
+    ESP_ERROR_CHECK_WITHOUT_ABORT(wifi_setup_start(MOUNT_POINT));
 #endif
 }

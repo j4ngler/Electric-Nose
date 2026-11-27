@@ -3,7 +3,7 @@ dependencies:
   espressif/esp_lcd_ili9341: ==2.0.0
   ## Required IDF version
   idf:
-    version: '>=4.1.0'
+    version: '==5.1.2'
   # # Put list of dependencies here
   # # For components maintained by Espressif:
   # component: "~1.0.0"
@@ -16,3 +16,4 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   atanisoft/esp_lcd_touch_xpt2046: ^1.0.5
+  espressif/esp_lcd_touch: ==1.1.2

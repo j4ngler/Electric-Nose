@@ -1,1 +1,3 @@
 build/
+sdkconfig.mesh
+sdkconfig.mesh.old

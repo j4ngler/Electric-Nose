@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi-Fi · E-Nose</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #edf2f1; color: #16302b; font: 16px/1.5 system-ui, sans-serif; }
+  main { width: min(34rem, calc(100% - 2rem)); margin: 8vh auto; padding: clamp(1.25rem, 5vw, 2.5rem);
+    background: #fff; border: 1px solid #cbd8d5; border-radius: 1rem; }
+  h1 { margin: 0 0 .75rem; font-size: 1.8rem; line-height: 1.25; }
+  p { margin: .75rem 0; }
+  form { display: grid; gap: .5rem; margin: 1.25rem 0; }
+  label { font-weight: 600; }
+  input, select, button { min-height: 2.75rem; max-width: 100%; padding: .5rem .75rem; border-radius: .4rem; font: inherit; }
+  input, select { width: 100%; color: inherit; background: #fff; border: 1px solid #869e99; }
+  button { cursor: pointer; background: #e5f0ed; color: #16302b; border: 1px solid #a5bdb7; }
+  button[type=submit] { background: #155b4d; color: #fff; margin-top: .5rem; }
+  button:disabled { opacity: .55; cursor: default; }
+  a { color: #155b4d; }
+  footer { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin-top: 1rem; }
+  [hidden] { display: none !important; }
+</style>
+<main>
+  <h1>Wi-Fi E-Nose</h1>
+  <p id="status" role="status">Đang đọc trạng thái…</p>
+  <p id="notice" role="status" hidden></p>
+  <p id="handoff" hidden>Để truy cập qua router, hãy chuyển máy tính sang mạng vừa cấu hình và mở <a id="lan"></a>.</p>
+  <button id="open" hidden>Mở mạng cấu hình</button>
+  <p id="join" hidden>Kết nối <strong>E-Nose-Setup</strong> rồi mở <a href="http://192.168.4.1/wifi">192.168.4.1</a>.</p>
+  <form id="settings" hidden>
+    <button type="button" id="scan">Quét mạng 2,4 GHz</button>
+    <label for="networks">Mạng tìm được</label>
+    <select id="networks"><option value="">Chọn mạng hoặc nhập SSID bên dưới</option></select>
+    <label for="ssid">Tên mạng (SSID)</label>
+    <input id="ssid" required maxlength="32" autocomplete="off" autocapitalize="none">
+    <label for="password">Mật khẩu Wi-Fi</label>
+    <input id="password" type="password" maxlength="64" autocomplete="new-password">
+    <button type="submit" id="connect">Kết nối</button>
+  </form>
+  <footer>
+    <button id="close" hidden>Tắt mạng cấu hình</button>
+    <a id="files" href="/" hidden>Tệp dữ liệu</a>
+  </footer>
+</main>
+<script>
+  'use strict';
+  const byId = id => document.getElementById(id);
+  const status = byId('status'), notice = byId('notice'), form = byId('settings');
+  const scan = byId('scan'), networks = byId('networks'), ssid = byId('ssid'), password = byId('password');
+  const connect = byId('connect'), open = byId('open'), close = byId('close'), lan = byId('lan');
+  let busy = false, connecting = false, closing = false, pollTimer;
+
+  async function request(path, payload) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+    try {
+      const options = { signal: controller.signal, cache: 'no-store' };
+      if (payload) {
+        options.method = 'POST';
+        options.headers = { 'Content-Type': 'application/json', 'X-E-Nose-Setup': '1' };
+        options.body = JSON.stringify(payload);
+      }
+      const response = await fetch('/api/wifi' + path, options);
+      if (!response.ok) throw new Error(await response.text());
+      return await response.json();
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function message(text) {
+    notice.textContent = text;
+    notice.hidden = !text;
+  }
+
+  function updateButtons() {
+    scan.disabled = connect.disabled = busy || connecting || closing;
+    open.disabled = close.disabled = busy || closing;
+  }
+
+  function display(data) {
+    connecting = data.state === 'connecting';
+    const connected = data.state === 'connected';
+    const failed = data.state === 'failed';
+    const reason = data.reason ? ' (mã Wi-Fi ' + data.reason + ')' : '';
+    status.textContent = connected ? (data.saved ? 'Đã kết nối và lưu cấu hình.' : 'Đã kết nối. Lưu cấu hình thất bại.')
+      : connecting ? 'Đang kết nối với router…'
+      : failed ? 'Không kết nối được với router' + reason + '. Kiểm tra tên mạng và mật khẩu.'
+      : 'Chọn mạng Wi-Fi cho thiết bị.';
+    form.hidden = !data.local;
+    close.hidden = !data.local || !connected || !data.saved || !data.setup;
+    open.hidden = data.local || data.setup;
+    byId('join').hidden = data.local || !data.setup;
+    byId('files').hidden = data.local;
+    byId('handoff').hidden = !data.local || !connected || !data.ip;
+    if (connected && data.ip) {
+      lan.href = 'http://' + data.ip + '/';
+      lan.textContent = data.ip;
+    }
+    updateButtons();
+  }
+
+  async function poll() {
+    if (!busy && !closing) {
+      try {
+        display(await request('/status'));
+      } catch {
+        status.textContent = 'Đang chờ E-Nose. Hãy kiểm tra kết nối với E-Nose-Setup.';
+      }
+    }
+    if (!closing) pollTimer = setTimeout(poll, 1200);
+  }
+
+  async function perform(action) {
+    busy = true;
+    updateButtons();
+    message('');
+    try {
+      await action();
+    } catch (error) {
+      message(error.name === 'AbortError' || error instanceof TypeError
+        ? 'Tạm mất kết nối. Trang sẽ tự kiểm tra lại trạng thái.' : error.message);
+    } finally {
+      busy = false;
+      updateButtons();
+    }
+  }
+
+  scan.onclick = () => perform(async () => {
+    const found = await request('/scan');
+    networks.replaceChildren(new Option('Chọn mạng hoặc nhập SSID bên dưới', ''));
+    for (const network of found) {
+      const option = new Option(network.ssid + (network.secure ? ' · Có mật khẩu' : ' · Mạng mở')
+        + ' · ' + network.rssi + ' dBm', network.ssid);
+      networks.add(option);
+    }
+    if (!found.length) message('Không tìm thấy mạng. Bạn có thể nhập SSID thủ công.');
+  });
+  networks.onchange = () => { if (networks.value) { ssid.value = networks.value; password.focus(); } };
+  form.onsubmit = event => {
+    event.preventDefault();
+    perform(async () => {
+      const data = await request('', { action: 'connect', ssid: ssid.value, password: password.value });
+      password.value = '';
+      display(data);
+    });
+  };
+  open.onclick = () => perform(async () => display(await request('', { action: 'open' })));
+  close.onclick = () => perform(async () => {
+    await request('', { action: 'close' });
+    closing = true;
+    clearTimeout(pollTimer);
+    status.textContent = 'E-Nose sắp tắt mạng cấu hình.';
+  });
+  poll();
+</script>
+</html>

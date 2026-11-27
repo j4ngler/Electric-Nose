@@ -1,4 +1,5 @@
 #include "FileServer.h"
+#include "WifiSetup.h"
 
 /* Handler to redirect incoming GET request for /index.html to /
  * This can be overridden by uploading file with same name */
@@ -51,7 +52,7 @@ esp_err_t http_response_dir_html(httpd_req_t *req, const char *dirpath)
     }
 
     /* Send HTML file header */
-    httpd_resp_sendstr_chunk(req, "<!DOCTYPE html><html><body>");
+    httpd_resp_sendstr_chunk(req, "<!DOCTYPE html><html><meta charset=\"utf-8\"><body>");
 
     /* Get handle to embedded file upload script */
     extern const unsigned char upload_script_start[] asm("_binary_upload_script_html_start");
@@ -60,6 +61,7 @@ esp_err_t http_response_dir_html(httpd_req_t *req, const char *dirpath)
 
     /* Add file upload form and script which on execution sends a POST request to /upload */
     httpd_resp_send_chunk(req, (const char *)upload_script_start, upload_script_size);
+    httpd_resp_sendstr_chunk(req, "<p><a href=\"/wifi\">Cấu hình Wi-Fi</a></p>");
 
     /* Send file-list table definition and column labels */
     httpd_resp_sendstr_chunk(req,
@@ -396,6 +398,7 @@ esp_err_t start_file_server(httpd_handle_t *server, const char *base_path)
             sizeof(server_data->base_path));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.stack_size = 6144;
 
     /* Use the URI wildcard matching function in order to
      * allow the same handler to respond to multiple different
@@ -403,10 +406,20 @@ esp_err_t start_file_server(httpd_handle_t *server, const char *base_path)
     config.uri_match_fn = httpd_uri_match_wildcard;
 
     ESP_LOGI(__func__, "Starting HTTP Server on port: '%d'", config.server_port);
-    if (httpd_start(server, &config) != ESP_OK)
+    esp_err_t err = httpd_start(server, &config);
+    if (err != ESP_OK)
     {
         ESP_LOGE(__func__, "Failed to start file server!");
-        return ESP_FAIL;
+        free(server_data);
+        server_data = NULL;
+        return err;
+    }
+
+    err = wifi_setup_register_routes(*server, display_content_handler, server_data);
+    if (err != ESP_OK) {
+        stop_file_server(*server);
+        *server = NULL;
+        return err;
     }
 
     /* URI handler for showing uploaded files in webpage*/

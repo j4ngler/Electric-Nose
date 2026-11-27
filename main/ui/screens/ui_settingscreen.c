@@ -1,4 +1,5 @@
 #include "../ui.h"
+#include "sdkconfig.h"
 
 void ui_settingscreen_screen_init(void)
 {
@@ -178,7 +179,12 @@ void ui_settingscreen_screen_init(void)
     lv_obj_set_style_bg_color(ui_pump_setting_onoff, lv_color_hex(0x34C759), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_set_style_bg_opa(ui_pump_setting_onoff, 255, LV_PART_INDICATOR | LV_STATE_CHECKED);
 
-    lv_obj_add_event_cb(ui_wifi_setting_onoff, ui_event_wifi_setting_onoff, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_state(ui_wifi_setting_onoff, LV_STATE_DISABLED);
+#if CONFIG_PELTIER_MESH
+    lv_label_set_text(ui_setting_wifi_state_label, "Mesh / UART");
+#else
+    lv_label_set_text(ui_setting_wifi_state_label, "Web configuration");
+#endif
     lv_obj_add_event_cb(ui_heating_setting_onoff, ui_event_heating_setting_onoff, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(ui_pump_setting_onoff, ui_event_pump_setting_onoff, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(ui_settingscreenMenu, ui_event_settingscreenMenu, LV_EVENT_ALL, NULL);

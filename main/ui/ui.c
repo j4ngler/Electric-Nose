@@ -73,10 +73,8 @@ lv_obj_t *uic_device_ID_value;
 void ui_settingscreen_screen_init(void);
 lv_obj_t *ui_settingscreen;
 void ui_event_settingscreenMenu(lv_event_t *e);
-void ui_event_wifi_setting_onoff(lv_event_t *e);
 void ui_event_heating_setting_onoff(lv_event_t *e);
 void ui_event_pump_setting_onoff(lv_event_t *e);
-void ui_wifi_setting_label_state_change(uint8_t state, char *str);
 lv_obj_t *ui_settingscreenMenu;
 lv_obj_t *ui_settingtitleLabel;
 lv_obj_t *ui_wifi_setting_label;
@@ -323,61 +321,6 @@ void ui_event_settingscreenMenu(lv_event_t *e)
             _ui_screen_change(&ui_aboutscreen, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_aboutscreen_screen_init);
         }
         free(buf);
-    }
-}
-
-void ui_event_wifi_setting_onoff(lv_event_t *e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    if (event_code == LV_EVENT_VALUE_CHANGED)
-    {
-        if (lv_obj_has_state(ui_wifi_setting_onoff, LV_STATE_CHECKED))
-        {
-            xEventGroupSetBits(wifi_control_eventGroup, WIFI_ON_BIT);
-        }
-        else
-        {
-            xEventGroupSetBits(wifi_control_eventGroup, WIFI_OFF_BIT);
-        }
-    }
-}
-
-void ui_wifi_setting_label_state_change(uint8_t state, char *str)
-{
-
-    switch (state)
-    {
-    case WIFI_START:
-    case WIFI_SCAN_DONE:
-    case WIFI_GOT_SSID_PWD:
-    case WIFI_RECONNECT:
-    {
-        _ui_label_set_property(ui_setting_wifi_state_label, _UI_LABEL_PROPERTY_TEXT, str);
-        _ui_obj_set_style_text_color(ui_setting_wifi_state_label, 0x000000);
-        break;
-    }
-    case WIFI_FOUND_CHANNEL:
-    {
-        _ui_label_set_property(ui_setting_wifi_state_label, _UI_LABEL_PROPERTY_TEXT, str);
-        _ui_obj_set_style_text_color(ui_setting_wifi_state_label, 0x000000);
-        break;
-    }
-    case WIFI_GOT_IP:
-    {
-        _ui_label_set_property(ui_setting_wifi_state_label, _UI_LABEL_PROPERTY_TEXT, str);
-        _ui_obj_set_style_text_color(ui_setting_wifi_state_label, 0x000000);
-        break;
-    }
-    case WIFI_NOT_CONNECTED:
-    {
-        _ui_label_set_property(ui_setting_wifi_state_label, _UI_LABEL_PROPERTY_TEXT, str);
-        _ui_obj_set_style_text_color(ui_setting_wifi_state_label, 0xd92626);
-        break;
-    }
-
-    default:
-        break;
     }
 }
 

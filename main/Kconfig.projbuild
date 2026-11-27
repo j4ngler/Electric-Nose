@@ -32,31 +32,7 @@ menu "Device in use"
 
 endmenu
 
-menu "WIFI/SMART CONFIG Configuration"
-
-   config DEFAULT_AP_SSID
-        string "The default AP SSID of the device"
-        default "WICOM"
-        help
-            The default SSID that the device will connect in case that it failed to connect AP of Smart config in the first Smart Config
-
-    config DEFAULT_AP_PASSWORD
-        string "The default AP PASSWORD of the device"
-        default "Wicom123"
-        help
-            The default PASSWORD that the device will connect in case that it failed to connect AP of Smart config in the first Smart Config
-
-     config DEFAULT_AP_MAC
-        string "The default AP MAC address of the device"
-        default "Wicom123"
-        help
-            The default MAC address that the device will connect in case that it failed to connect AP of Smart config in the first Smart Config
-
-    config MAX_RECONNECT_ATTEMP_NUMBER
-        int "The max reconnect attemp number"
-        default 5
-        help
-            The number ESP32 will try to reconnect if it is disconnected from the local network.
+menu "Wi-Fi Configuration"
 
     config MAXIMUM_AP
         int "Maximum access points"

@@ -11,13 +11,6 @@ extern "C"
 #include "ui_helpers.h"
     // #include "ui_events.h"
 
-#define WIFI_START 0x01
-#define WIFI_SCAN_DONE 0x02
-#define WIFI_FOUND_CHANNEL 0x03
-#define WIFI_GOT_SSID_PWD 0x04
-#define WIFI_GOT_IP 0x05
-#define WIFI_NOT_CONNECTED 0x06
-#define WIFI_RECONNECT 0x07
 
     void appear_Animation(lv_obj_t *TargetObject, int delay);
 
@@ -93,10 +86,8 @@ extern "C"
     void ui_settingscreen_screen_init(void);
     extern lv_obj_t *ui_settingscreen;
     void ui_event_settingscreenMenu(lv_event_t *e);
-    void ui_event_wifi_setting_onoff(lv_event_t *e);
     void ui_event_heating_setting_onoff(lv_event_t *e);
     void ui_event_pump_setting_onoff(lv_event_t *e);
-    void ui_wifi_setting_label_state_change(uint8_t state, char *str);
     void ui_synchronize_pump_state(bool state);
     extern lv_obj_t *ui_settingscreenMenu;
     extern lv_obj_t *ui_settingtitleLabel;
