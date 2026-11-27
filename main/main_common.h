@@ -1,6 +1,7 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "pcf8575.h"
 #include "driver/gpio.h"
@@ -12,6 +13,7 @@ extern i2c_dev_t pcf8575_device;
 #define WIFI_OFF_BIT BIT0
 #define WIFI_ON_BIT BIT1
 #define MEASURE_BIT BIT2
+#define WIFI_CONFIG_BIT BIT3
 // Define relay trigger pin
 #define RELAY_TRIGGER_PIN GPIO_NUM_25
 

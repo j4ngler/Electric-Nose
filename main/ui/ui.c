@@ -328,6 +328,7 @@ void ui_event_settingscreenMenu(lv_event_t *e)
 
 void ui_event_wifi_setting_onoff(lv_event_t *e)
 {
+    if (!wifi_control_eventGroup) return;
     lv_event_code_t event_code = lv_event_get_code(e);
 
     if (event_code == LV_EVENT_VALUE_CHANGED)
@@ -345,6 +346,7 @@ void ui_event_wifi_setting_onoff(lv_event_t *e)
 
 void ui_wifi_setting_label_state_change(uint8_t state, char *str)
 {
+    if (!ui_setting_wifi_state_label) return;
 
     switch (state)
     {
@@ -472,6 +474,7 @@ void ui_event_pump_setting_onoff(lv_event_t *e)
  */
 void ui_update_device_icon_state(lv_obj_t *TargetObject, bool state)
 {
+    if (!TargetObject) return;
     if (state == true)
     {
         _ui_obj_set_style_text_color(TargetObject, 0x04A904);

@@ -1,4 +1,11 @@
 #include "../ui.h"
+#include "main_common.h"
+
+static void request_wifi_config(lv_event_t *event)
+{
+    if (wifi_control_eventGroup && lv_obj_has_state(ui_wifi_setting_onoff, LV_STATE_CHECKED))
+        xEventGroupSetBits(wifi_control_eventGroup, WIFI_CONFIG_BIT);
+}
 
 void ui_settingscreen_screen_init(void)
 {
@@ -66,6 +73,14 @@ void ui_settingscreen_screen_init(void)
     lv_obj_set_style_border_width(ui_wifi_setting_onoff, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_wifi_setting_onoff, lv_color_hex(0x34C759), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_set_style_bg_opa(ui_wifi_setting_onoff, 255, LV_PART_INDICATOR | LV_STATE_CHECKED);
+
+    lv_obj_t *wifi_config_button = lv_btn_create(ui_settingscreen);
+    lv_obj_set_size(wifi_config_button, 108, 23);
+    lv_obj_align(wifi_config_button, LV_ALIGN_TOP_LEFT, 105, 52);
+    lv_obj_t *wifi_config_label = lv_label_create(wifi_config_button);
+    lv_label_set_text(wifi_config_label, "Change Wi-Fi");
+    lv_obj_center(wifi_config_label);
+    lv_obj_add_event_cb(wifi_config_button, request_wifi_config, LV_EVENT_CLICKED, NULL);
 
     ui_setting_wifi_state_panel = lv_obj_create(ui_settingscreen);
     lv_obj_set_width(ui_setting_wifi_state_panel, 225);

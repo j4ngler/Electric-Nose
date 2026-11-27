@@ -34,6 +34,20 @@ endmenu
 
 menu "WIFI/SMART CONFIG Configuration"
 
+    config ENOSE_MQTT_BROKER_URI
+        string "MQTT broker URI for Wi-Fi status"
+        default ""
+        help
+            Set the broker address reachable from ESP Root, e.g. mqtt://192.168.1.10:1883.
+            An empty value disables Wi-Fi status publishing.
+
+    config ENOSE_MQTT_DEVICE_CODE
+        string "E-Nose device code for MQTT status"
+        default "ENOSE_001"
+        help
+            Use the same code as enose_devices.device_code.
+
+
    config DEFAULT_AP_SSID
         string "The default AP SSID of the device"
         default "WICOM"
