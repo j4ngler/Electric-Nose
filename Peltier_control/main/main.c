@@ -23,6 +23,13 @@ static const char *TAG = "MAIN";
 static TaskHandle_t s_control_task_handle = NULL;
 static app_config_t s_app_cfg;
 
+#if CONFIG_PELTIER_MESH
+static peltier_limit_result_t apply_remote_limits(const peltier_limits_t *limits)
+{
+    return app_config_set_limits(&s_app_cfg, limits);
+}
+#endif
+
 #if CONFIG_PELTIER_SELF_TEST_ENABLE
 static bool run_hardware_self_test(const app_config_t *cfg)
 {
@@ -157,9 +164,11 @@ static void peltier_control_task(void *pvParameters)
         bool can_ok = telemetry_check_can_alive();
 
         // 4. Update the FSM state machine & drive the signal on D13 (GPIO13 - PWM label)
+#if CONFIG_PELTIER_MESH
+        bool remote_enabled = peltier_mesh_node_enabled(apply_remote_limits);
+#endif
         app_config_t effective_cfg = s_app_cfg;
 #if CONFIG_PELTIER_MESH
-        bool remote_enabled = peltier_mesh_node_enabled();
         effective_cfg.system_enable = s_app_cfg.system_enable && remote_enabled;
 #endif
         peltier_fsm_update(&fsm_state, &effective_cfg, filt_temp, filt_hum, temp_hot, sht35_ok, ntc_ok, can_ok);
@@ -171,6 +180,7 @@ static void peltier_control_task(void *pvParameters)
             .humidity = filt_hum,
             .hot_c = temp_hot,
             .errors = fsm_state.error_flags,
+            .limits = app_config_get_limits(&s_app_cfg),
         };
         peltier_mesh_send_status(&status);
 #endif

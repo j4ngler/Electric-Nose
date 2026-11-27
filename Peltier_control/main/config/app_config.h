@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "peltier_mesh.h"
 
 typedef struct {
     bool system_enable;         // Flag to enable the system
@@ -17,5 +18,7 @@ typedef struct {
 } app_config_t;
 
 esp_err_t app_config_init(app_config_t *cfg);
+peltier_limits_t app_config_get_limits(const app_config_t *cfg);
+peltier_limit_result_t app_config_set_limits(app_config_t *cfg, const peltier_limits_t *limits);
 
 #endif // APP_CONFIG_H

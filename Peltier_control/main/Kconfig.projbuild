@@ -45,18 +45,22 @@ menu "Peltier Controller Configuration"
 
         config PELTIER_TEMP_ON_X10
             int "Upper chamber temperature threshold (x0.1 C)"
+            range -400 1250
             default 400
 
         config PELTIER_TEMP_OFF_X10
             int "Lower chamber temperature threshold (x0.1 C)"
+            range -400 1250
             default 200
 
         config PELTIER_HUM_ON_X10
             int "Turn ON Humidity Threshold (x0.1 %RH, e.g. 650 = 65.0 %)"
+            range 0 1000
             default 650
 
         config PELTIER_HUM_OFF_X10
             int "Lower humidity threshold (x0.1 %RH, e.g. 500 = 50.0 %)"
+            range 0 1000
             default 500
 
         config PELTIER_MIN_ON_OFF_SEC

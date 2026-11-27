@@ -22,8 +22,9 @@ Xem [hướng dẫn kiểm tra hai bo](../../Electric-Nose/README.md#thử-đi�
   15 giây). Lỗi cảm biến, bảo vệ quá nhiệt hoặc mất quyền chạy ngắt đầu
   ra ngay ở lần cập nhật phát hiện lỗi.
 
-Firmware lấy các ngưỡng từ cấu hình build. Để chỉnh, vào **Peltier
-Controller Configuration → Control & Protection Parameters** trong
-`menuconfig`, sau đó build và nạp lại bo Peltier. Nhiệt độ và độ ẩm
-trong menu nhập theo đơn vị 0,1. Web/app và gói Mesh hiện chưa hỗ trợ
-thay đổi ngưỡng lúc chạy.
+Sau khi nạp hai firmware dùng cùng phiên bản Mesh, chỉnh ngưỡng trong tab
+**E-Nose** của dashboard AirSENSE. Dashboard gửi cả bốn ngưỡng trong một
+yêu cầu qua bo E-Nose. Bo Peltier lưu thành công vào NVS
+mới áp dụng vào vòng điều khiển và xác nhận. Các lần khởi động tiếp theo
+dùng giá trị đã lưu. Nếu chưa có giá trị đã lưu, bo dùng mặc định trong
+nhóm **Control & Protection Parameters** của `menuconfig`.
