@@ -29,6 +29,7 @@
 #include <spi_flash_mmap.h>
 #if CONFIG_PELTIER_MESH
 #include "peltier_mesh.h"
+#include "FileServer.h"
 #endif
 #include "esp_tls.h"
 #include "esp_ota_ops.h"
@@ -492,7 +493,12 @@ void app_main(void)
     xTaskCreate(&readSenorChamberTemperature_task, "Temperature monitor task", 10 * 1024, NULL, 11, NULL);
 
 #if CONFIG_PELTIER_MESH
-    ESP_ERROR_CHECK_WITHOUT_ABORT(peltier_mesh_start(true));
+    esp_err_t mesh_err = peltier_mesh_start(true);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(mesh_err);
+    if (mesh_err == ESP_OK) {
+        httpd_handle_t server = NULL;
+        ESP_ERROR_CHECK_WITHOUT_ABORT(start_file_server(&server, MOUNT_POINT));
+    }
 #elif CONFIG_USING_WIFI
     ESP_ERROR_CHECK_WITHOUT_ABORT(wifi_setup_start(MOUNT_POINT));
 #endif

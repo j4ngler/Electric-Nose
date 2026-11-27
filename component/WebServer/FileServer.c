@@ -1,5 +1,6 @@
 #include "FileServer.h"
 #include "WifiSetup.h"
+#include "PeltierWeb.h"
 
 /* Handler to redirect incoming GET request for /index.html to /
  * This can be overridden by uploading file with same name */
@@ -61,7 +62,9 @@ esp_err_t http_response_dir_html(httpd_req_t *req, const char *dirpath)
 
     /* Add file upload form and script which on execution sends a POST request to /upload */
     httpd_resp_send_chunk(req, (const char *)upload_script_start, upload_script_size);
+#if !CONFIG_PELTIER_MESH
     httpd_resp_sendstr_chunk(req, "<p><a href=\"/wifi\">Cấu hình Wi-Fi</a></p>");
+#endif
 
     /* Send file-list table definition and column labels */
     httpd_resp_sendstr_chunk(req,
@@ -399,6 +402,7 @@ esp_err_t start_file_server(httpd_handle_t *server, const char *base_path)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 6144;
+    config.max_uri_handlers = 10;
 
     /* Use the URI wildcard matching function in order to
      * allow the same handler to respond to multiple different
@@ -415,7 +419,12 @@ esp_err_t start_file_server(httpd_handle_t *server, const char *base_path)
         return err;
     }
 
-    err = wifi_setup_register_routes(*server, display_content_handler, server_data);
+    err = peltier_web_register_routes(*server);
+#if !CONFIG_PELTIER_MESH
+    if (err == ESP_OK) {
+        err = wifi_setup_register_routes(*server, display_content_handler, server_data);
+    }
+#endif
     if (err != ESP_OK) {
         stop_file_server(*server);
         *server = NULL;

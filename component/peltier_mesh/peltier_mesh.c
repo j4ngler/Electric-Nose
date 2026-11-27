@@ -16,11 +16,13 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #define MESH_LEASE_US (5 * 1000 * 1000)
+#define CONFIG_TIMEOUT_US (10 * 1000 * 1000)
 #define MESH_REFRESH_US (1000 * 1000)
 
-enum { WIRE_VERSION = 1, WIRE_COMMAND = 1, WIRE_STATUS = 2 };
+enum { WIRE_VERSION = 2, WIRE_COMMAND = 1, WIRE_STATUS = 2 };
 
 typedef struct {
     uint8_t version;
@@ -33,9 +35,12 @@ typedef struct {
     float temp_c;
     float humidity;
     float hot_c;
+    uint32_t config_id;
+    uint32_t config_result;
+    peltier_limits_t limits;
 } mesh_packet_t;
 
-_Static_assert(sizeof(mesh_packet_t) == 28, "Unexpected ESP32 mesh packet layout");
+_Static_assert(sizeof(mesh_packet_t) == 44, "Unexpected ESP32 mesh packet layout");
 
 static const char *TAG = "PELTIER_MESH";
 static const uint8_t mesh_id[6] = {0x02, 0x45, 0x4e, 0x4f, 0x53, 0x45};
@@ -48,6 +53,50 @@ static uint32_t node_session;
 static uint32_t node_sequence;
 static bool node_enabled;
 static int64_t last_command_us;
+static uint32_t node_config_id;
+static peltier_limit_result_t node_config_result;
+static SemaphoreHandle_t config_lock;
+static peltier_config_status_t config_status;
+static peltier_limits_t requested_limits;
+static int64_t config_deadline_us;
+
+void peltier_mesh_get_config(peltier_config_status_t *status)
+{
+    *status = (peltier_config_status_t){0};
+    if (!config_lock) return;
+    xSemaphoreTake(config_lock, portMAX_DELAY);
+    *status = config_status;
+    xSemaphoreGive(config_lock);
+}
+
+esp_err_t peltier_mesh_set_config(const peltier_limits_t *limits, uint32_t *request_id)
+{
+    if (!peltier_limits_valid(limits)) return ESP_ERR_INVALID_ARG;
+    if (!config_lock) return ESP_ERR_INVALID_STATE;
+    esp_err_t err = ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(config_lock, portMAX_DELAY);
+    if (config_status.online && atomic_load(&connected)) {
+        err = ESP_ERR_NOT_FINISHED;
+        if (config_status.result != PELTIER_LIMIT_PENDING) {
+            if (++config_status.request_id == 0) ++config_status.request_id;
+            *request_id = config_status.request_id;
+            config_status.result = PELTIER_LIMIT_PENDING;
+            requested_limits = *limits;
+            config_deadline_us = esp_timer_get_time() + CONFIG_TIMEOUT_US;
+            err = ESP_OK;
+        }
+    }
+    xSemaphoreGive(config_lock);
+    return err;
+}
+
+static void root_got_ip(void *arg, esp_event_base_t base, int32_t event, void *data)
+{
+    const ip_event_got_ip_t *got_ip = data;
+    if (got_ip->esp_netif == root_netif) {
+        ESP_LOGI(TAG, "E-Nose LAN IP: " IPSTR, IP2STR(&got_ip->ip_info.ip));
+    }
+}
 
 static void mesh_event(void *arg, esp_event_base_t base, int32_t event, void *data)
 {
@@ -125,16 +174,42 @@ static void root_task(void *arg)
             ESP_LOGW(TAG, "Wait for Peltier ACK before enabling");
         }
         int64_t now = esp_timer_get_time();
+        xSemaphoreTake(config_lock, portMAX_DELAY);
+        if (!atomic_load(&connected) || now - last_status_us >= MESH_LEASE_US) {
+            config_status.online = false;
+        }
+        if (config_status.result == PELTIER_LIMIT_PENDING &&
+            (!config_status.online || now >= config_deadline_us)) {
+            config_status.result = PELTIER_LIMIT_TIMEOUT;
+        }
+        command.config_id = config_status.result == PELTIER_LIMIT_PENDING ? config_status.request_id : 0;
+        command.limits = requested_limits;
+        xSemaphoreGive(config_lock);
         if (atomic_load(&connected) && now >= next_send_us) {
             send_packet(&command);
             next_send_us = now + MESH_REFRESH_US;
         }
 
         mesh_packet_t status;
-        if (atomic_load(&connected) && receive_packet(&status, WIRE_STATUS, 100)) {
+        if (atomic_load(&connected) && receive_packet(&status, WIRE_STATUS, 100) &&
+            status.session == command.session && peltier_limits_valid(&status.limits)) {
             last_status_us = esp_timer_get_time();
             ready = status.session == command.session && status.sequence == command.sequence &&
                     status.enabled == command.enabled;
+            xSemaphoreTake(config_lock, portMAX_DELAY);
+            config_status.online = true;
+            config_status.limits = status.limits;
+            if (config_status.result == PELTIER_LIMIT_PENDING &&
+                status.config_id == config_status.request_id &&
+                status.config_result >= PELTIER_LIMIT_APPLIED &&
+                status.config_result <= PELTIER_LIMIT_STORAGE_ERROR) {
+                config_status.result = status.config_result;
+                if (status.config_result == PELTIER_LIMIT_APPLIED &&
+                    memcmp(&requested_limits, &status.limits, sizeof(status.limits)) != 0) {
+                    config_status.result = PELTIER_LIMIT_REJECTED;
+                }
+            }
+            xSemaphoreGive(config_lock);
             ESP_LOGI(TAG, "seq=%" PRIu32 " ack=%d enable=%d out=%d T=%.2f RH=%.2f hot=%.2f errors=0x%08" PRIx32,
                      status.sequence, ready, status.enabled, status.output_on,
                      status.temp_c, status.humidity, status.hot_c, status.errors);
@@ -143,7 +218,7 @@ static void root_task(void *arg)
     }
 }
 
-bool peltier_mesh_node_enabled(void)
+bool peltier_mesh_node_enabled(peltier_limit_result_t (*apply)(const peltier_limits_t *))
 {
     if (!started) return false;
     int64_t now = esp_timer_get_time();
@@ -160,6 +235,8 @@ bool peltier_mesh_node_enabled(void)
             if (command.enabled) continue; // Establish a new session with OFF first.
             node_session = command.session;
             node_sequence = 0;
+            node_config_id = 0;
+            node_config_result = PELTIER_LIMIT_IDLE;
         }
         if (command.sequence < node_sequence) continue;
         if (command.sequence > node_sequence) {
@@ -168,6 +245,11 @@ bool peltier_mesh_node_enabled(void)
         }
         if (!command.enabled) node_enabled = false;
         last_command_us = now;
+        if (command.config_id > node_config_id) {
+            node_config_id = command.config_id;
+            node_config_result = peltier_limits_valid(&command.limits) && apply
+                ? apply(&command.limits) : PELTIER_LIMIT_REJECTED;
+        }
     }
     return node_enabled;
 }
@@ -186,6 +268,9 @@ void peltier_mesh_send_status(const peltier_mesh_status_t *status)
         .temp_c = status->temp_c,
         .humidity = status->humidity,
         .hot_c = status->hot_c,
+        .config_id = node_config_id,
+        .config_result = node_config_result,
+        .limits = status->limits,
     };
     send_packet(&packet);
 }
@@ -216,7 +301,11 @@ esp_err_t peltier_mesh_start(bool root)
     for (size_t i = 0; i < sizeof(peer.addr); i++) peer.addr[i] = bytes[i];
 
     if (root) {
+        config_lock = xSemaphoreCreateMutex();
+        if (!config_lock) return ESP_ERR_NO_MEM;
+        config_status.request_id = esp_random() & UINT32_C(0x7fffffff);
         RETURN_ON_ERROR(esp_netif_create_default_wifi_mesh_netifs(&root_netif, NULL));
+        RETURN_ON_ERROR(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, root_got_ip, NULL));
     }
     wifi_init_config_t wifi = WIFI_INIT_CONFIG_DEFAULT();
     RETURN_ON_ERROR(esp_wifi_init(&wifi));

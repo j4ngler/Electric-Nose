@@ -185,6 +185,15 @@ static bool request_address(httpd_req_t *req, struct in_addr *ip)
     return false;
 }
 
+bool web_request_has_device_host(httpd_req_t *req)
+{
+    struct in_addr address;
+    char ip[INET_ADDRSTRLEN], host[24];
+    return request_address(req, &address) && inet_ntop(AF_INET, &address, ip, sizeof(ip)) &&
+           httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) == ESP_OK &&
+           strcmp(host, ip) == 0;
+}
+
 static bool on_setup_network(httpd_req_t *req)
 {
     struct in_addr address;
@@ -320,13 +329,7 @@ static void load_setup_password(void)
 static esp_err_t change_setup(httpd_req_t *req)
 {
     char marker[4];
-    char host[24];
-    char ip[INET_ADDRSTRLEN];
-    struct in_addr address;
-    if (!request_address(req, &address) ||
-        !inet_ntop(AF_INET, &address, ip, sizeof(ip)) ||
-        httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK ||
-        strcmp(host, ip) != 0 ||
+    if (!web_request_has_device_host(req) ||
         httpd_req_get_hdr_value_str(req, "X-E-Nose-Setup", marker, sizeof(marker)) != ESP_OK ||
         strcmp(marker, "1") != 0) {
         return httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Open setup using the device IP");

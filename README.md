@@ -103,5 +103,16 @@ sau khi node đã ngắt do timeout cần một lệnh bật mới. Nếu node v
 Thử với đầu ra công suất chưa nối tải. Xác nhận node khởi động ở OFF,
 nhận cả hai lệnh, gửi số đo, và về OFF khi ngắt root. Node kiểm tra hạn
 lệnh 5 giây trong vòng lấy mẫu (mặc định 1 giây). Chế độ mesh bỏ xung tự
-kiểm tra đầu ra khi khởi động. Mesh dùng chung radio với chức năng Wi-Fi
-cũ, nên khi bật mesh, phần SmartConfig và công tắc Wi-Fi cũ được vô hiệu.
+kiểm tra đầu ra khi khởi động.
+
+### Đổi ngưỡng Peltier từ dashboard AirSENSE
+
+Nạp hai firmware cùng phiên bản giao thức Mesh trước khi thử. Khi root
+nhận IP từ router, serial in địa chỉ LAN của E-Nose. Máy chủ AirSENSE
+cần truy cập được địa chỉ đó để đọc và ghi bốn ngưỡng nhiệt độ, độ ẩm
+qua `/api/peltier/limits`. Người dùng thực hiện thao tác trong tab
+**E-Nose** của AirSENSE. Sau khi node xác nhận đã lưu NVS, API trả
+trạng thái áp dụng cho yêu cầu tương ứng.
+
+API Peltier dùng IP LAN của root ở chế độ Mesh. Trang SoftAP cấu hình
+Wi-Fi thuộc chế độ Wi-Fi thường của firmware.
